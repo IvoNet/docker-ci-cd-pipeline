@@ -1,0 +1,123 @@
+version: '2'
+services:
+  jenkins:
+    image: ivonet/jenkins:latest
+    ports:
+    - "8081:8080"
+    - "50000:50000"
+    links:
+    - sonarqube
+    - nexus
+    volumes_from:
+    - jenkinsdata
+
+  jenkinsdata:
+    image: ivonet/jenkins:latest
+    volumes:
+      - /var/jenkins_home
+      - /home/ordina:/home/ordina
+    command: /bin/true
+
+  nexus:
+    image: sonatype/nexus3:latest
+    ports:
+    - "8083:8081"
+    volumes_from:
+    - nexusdata
+  
+  nexusdata:
+    image: sonatype/nexus3:latest
+    volumes:
+    - /nexus-data
+    command: /bin/true
+
+  sonarqube:
+    image: sonarqube:5.4
+    ports:
+    - "9000:9000"
+    links:
+    - db
+    environment:
+    - SONARQUBE_JDBC_URL=jdbc:postgresql://db:5432/sonar
+    volumes_from:
+    - plugins
+
+  db:
+    image: postgres:9.1
+    volumes_from:
+      - datadb
+    environment:
+    - POSTGRES_USER=sonar
+    - POSTGRES_PASSWORD=sonar
+
+  datadb:
+    image: postgres:9.1
+    volumes:
+      - /var/lib/postgresql
+    command: /bin/true
+
+  plugins:
+    image: sonarqube:5.4
+    volumes:
+    - /opt/sonarqube/extensions
+    - /opt/sonarqube/lib/bundled-plugins
+    command: /bin/true
+
+  mongodb:
+    image: mongo:latest
+    command: mongod --smallfiles
+    ports:
+    - "27017:27017"
+    volumes:
+    - ./mongo:/data/db
+
+  hygieia-api:
+    image: capitalone/hygieia-api:latest
+    ports:
+    - "8082:8080"
+    volumes:
+    - ./logs:/hygieia/logs
+    links:
+    - mongodb:mongo
+
+  hygieia-ui:
+    image: capitalone/hygieia-ui:latest
+    ports:
+    - "8088:80"
+    links:
+    - hygieia-api
+
+  hygieia-github-scm-collector:
+    image: capitalone/hygieia-github-scm-collector:latest
+    volumes:
+    - ./logs:/hygieia/logs
+    links:
+    - mongodb:mongo
+    - hygieia-api
+  # place any values you want to change in docker-compose.override.yml
+  #  environment:
+  #  - GITHUB_HOST=github.com
+  #  - GITHUB_CRON='0 0/5 * * * *'
+  #  - GITHUB_COMMIT_THREASHOLD_DAYS=15  
+
+  hygieia-jenkins-build-collector:
+    image: capitalone/hygieia-jenkins-build-collector:latest
+    volumes:
+    - ./logs:/hygieia/logs
+    links:
+    - mongodb:mongo
+    - hygieia-api
+    - jenkins
+    environment:
+    - JENKINS_MASTER=http://jenkins:8080
+
+  hygieia-sonar-codequality-collector:
+    image: capitalone/hygieia-sonar-codequality-collector:latest
+    volumes:
+    - ./logs:/hygieia/logs
+    links:
+    - mongodb:mongo
+    - hygieia-api
+    - sonarqube
+    environment:
+    - SONAR_URL=http://sonarqube:9000

@@ -1,0 +1,113 @@
+jenkins:
+  image: 192.168.1.100:8083/ivonet/jenkins:latest
+  ports:
+   - "8081:8081"
+   - "50000:50000"
+  links:
+   - sonarqube
+   - nexus
+   - gogs
+  volumes:
+   - ./jenkins:/var/jenkins_home
+
+nexus:
+  image: 192.168.1.100:8083/sonatype/nexus3:latest
+  ports:
+   - "8083:8081"
+  volumes:
+   - ./nexus:/nexus-data:rw
+
+sonarqube:
+  image: 192.168.1.100:8083/sonarqube:5.4
+  ports:
+   - "9000:9000"
+  links:
+   - sonardb
+  environment:
+   - SONARQUBE_JDBC_URL=jdbc:postgresql://sonardb:5432/sonar
+  volumes_from:
+   - plugins
+
+plugins:
+  image: 192.168.1.100:8083/"sonarqube:5.4"
+  volumes:
+   - /opt/sonarqube/extensions
+   - /opt/sonarqube/lib/bundled-plugins
+  command: /bin/true
+  
+sonardb:
+  image: 192.168.1.100:8083/postgres:9.1
+  environment:
+   - POSTGRES_USER=sonar
+   - POSTGRES_PASSWORD=sonar
+  volumes:
+   - ./sonarqube/sonardb:/var/lib/postgresql
+
+gogs:
+  image: 192.168.1.100:8083/gogs/gogs:0.9.97
+  ports:
+   - 8084:3000
+  links:
+   - gogsdb
+  volumes:
+   - ./gogs/data:/data
+
+gogsdb:
+  image: 192.168.1.100:8083/postgres:9.1
+  environment:
+   - POSTGRES_USER=gogs
+   - POSTGRES_PASSWORD=gogs
+  volumes:
+   - ./gogs/postgresql:/var/lib/postgresql
+
+mongodb:
+  image: 192.168.1.100:8083/mongo:3.3
+  command: mongod --smallfiles
+  volumes:
+   - ./hygieia/mongo:/data/db
+
+hygieia-api:
+  image: 192.168.1.100:8083/capitalone/hygieia-api:latest
+  ports:
+   - "8082:8080"
+  volumes:
+   - ./hygieia/logs:/hygieia/logs
+  links:
+   - mongodb:mongo
+
+hygieia-ui:
+  image: 192.168.1.100:8083/capitalone/hygieia-ui:latest
+  ports:
+  - "8085:80"
+  links:
+  - hygieia-api
+
+hygieia-github-scm-collector:
+  image: 192.168.1.100:8083/capitalone/hygieia-github-scm-collector:latest
+  volumes:
+  - ./hygieia/logs:/hygieia/logs
+  links:
+  - mongodb:mongo
+  - hygieia-api
+
+hygieia-jenkins-build-collector:
+  image: 192.168.1.100:8083/capitalone/hygieia-jenkins-build-collector:latest
+  volumes:
+  - ./hygieia/logs:/hygieia/logs
+  links:
+  - mongodb:mongo
+  - hygieia-api
+  - jenkins
+  environment:
+  - JENKINS_MASTER=http://jenkins:8081
+
+hygieia-sonar-codequality-collector:
+  image: 192.168.1.100:8083/capitalone/hygieia-sonar-codequality-collector:latest
+  volumes:
+  - ./hygieia/logs:/hygieia/logs
+  links:
+  - mongodb:mongo
+  - hygieia-api
+  - sonarqube
+  environment:
+  - SONAR_URL=http://sonarqube:9000

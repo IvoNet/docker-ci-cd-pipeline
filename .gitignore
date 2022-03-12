@@ -1,0 +1,12 @@
+.idea
+ci/logs
+hygieia/logs
+abk/abk-data
+derby/*.gz
+private-registry/*sh
+.idea
+*.iml
+node_modules
+.DS_Store
+target
+__pycache__
